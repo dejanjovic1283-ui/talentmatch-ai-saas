@@ -1,0 +1,6 @@
+streamlit
+openai
+numpy
+pandas
+pdfplumber
+reportlab
