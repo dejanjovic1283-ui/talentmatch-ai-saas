@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+python-dotenv
+requests
+openai
+firebase-admin
+google-cloud-storage
+pydantic
+email-validator
+PyPDF2
+python-multipart

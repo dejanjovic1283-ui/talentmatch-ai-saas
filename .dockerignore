@@ -1,15 +1,50 @@
+# Git
+.git
+.gitignore
+
+# Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.Python
 
-.env
-.streamlit/secrets.toml
-
-.git
-.gitignore
-
+# Virtual environments
+.venv/
 venv/
 env/
 
+# Environment files
+.env
+.env.*
+backend/.env
+
+# Editors
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
 *.log
+
+# Databases
+*.db
+*.sqlite3
+
+# Streamlit cache
+.streamlit/
+
+# Local uploads / temp
+tmp/
+temp/
+uploads/
+
+# Secrets / service accounts
+*.json
+
+# Optional local artifacts
+dist/
+build/
