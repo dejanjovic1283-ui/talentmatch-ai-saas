@@ -1,8 +1,12 @@
-import json
-import certifi
 import os
+import certifi
+import ssl
 
-os.environ['SSL_CERT_FILE'] = certifi.where()
+os.environ["SSL_CERT_FILE"] = certifi.where()
+os.environ["REQUESTS_CA_BUNDLE"] = certifi.where()
+ssl._create_default_https_context = ssl._create_unverified_context
+
+import json
 import re
 from io import BytesIO
 from typing import Any, Dict, Optional
@@ -15,8 +19,10 @@ from google.cloud import storage
 from openai import OpenAI
 from PyPDF2 import PdfReader
 
-
 load_dotenv()
+
+
+
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 FIREBASE_API_KEY = os.getenv("FIREBASE_API_KEY")
