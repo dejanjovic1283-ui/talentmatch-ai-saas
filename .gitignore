@@ -45,3 +45,6 @@ build/
 tmp/
 temp/
 uploads/
+
+serviceAccountKey.json
+backend/serviceAccountKey.json

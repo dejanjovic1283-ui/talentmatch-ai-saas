@@ -29,17 +29,18 @@ def get_openai_client() -> OpenAI:
     return OpenAI(api_key=api_key)
 
 
-def init_firebase() -> None:
-    """
-    Initializes Firebase Admin SDK once.
-    Works if GOOGLE_APPLICATION_CREDENTIALS is set to a service account JSON path.
-    """
+def init_firebase():
+    import os
+    import firebase_admin
+    from firebase_admin import credentials
+
     if firebase_admin._apps:
         return
 
-    cred_path = GOOGLE_APPLICATION_CREDENTIALS or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    cred_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+
     if not cred_path:
-        raise ValueError("GOOGLE_APPLICATION_CREDENTIALS is not set.")
+        raise ValueError("GOOGLE_APPLICATION_CREDENTIALS not set")
 
     if not os.path.exists(cred_path):
         raise ValueError(f"Service account file not found: {cred_path}")
