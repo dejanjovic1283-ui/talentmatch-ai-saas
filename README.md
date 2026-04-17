@@ -1,125 +1,162 @@
 # 🚀 TalentMatch AI SaaS
 
-AI-powered SaaS application for resume analysis and job matching.
+AI-powered platform that analyzes CVs against job descriptions and provides actionable feedback — helping candidates improve their chances of getting hired.
 
-## 🌐 Overview
+---
 
-TalentMatch AI allows users to:
+## 💡 Why this project exists
 
-- Create an account and log in
-- Upload a CV (PDF)
-- Paste a job description
-- Get an AI-powered match score
-- Receive structured feedback:
-- strengths
-- weaknesses
-- missing skills
-- improvement suggestions
-- View analysis history
+The job application process is inefficient and frustrating.
 
-## ✨ Features
+Candidates:
+- Send dozens or hundreds of CVs
+- Receive little to no feedback
+- Don’t know how to improve their resumes
 
-- Authentication (Firebase / Identity Platform)
-- Resume upload (PDF)
-- AI analysis (OpenAI)
-- Match scoring system
-- History per user
-- Dockerized backend and frontend
-- Cloud-ready architecture
+Recruiters:
+- Spend hours manually reviewing CVs
+- Struggle to quickly identify the best candidates
 
-## 🛠 Tech Stack
+👉 TalentMatch AI automates this process using AI, providing **instant, structured, and actionable CV analysis**.
 
-- Python 3.13
-- FastAPI (backend)
-- Streamlit (frontend)
+---
+
+## ⚡ Core Features
+
+- 🔑 User authentication (Firebase)
+- 📄 Upload CV (PDF)
+- 🧾 Paste job description
+- 🤖 AI-powered analysis
+- 📊 Match score calculation
+- 🧠 Summary generation
+- ✅ Strengths identification
+- ❌ Weakness detection
+- 💡 Actionable improvement suggestions
+- 🕘 Analysis history tracking
+
+---
+
+## 🧠 Example Output
+
+- Match Score: **80%**
+- Summary: Candidate fits role but needs stronger Python emphasis
+- Suggestions:
+- Highlight Python experience
+- Add Docker-based projects
+
+---
+
+## 🏗️ Tech Stack
+
+Frontend:
+- Streamlit
+
+Backend:
+- FastAPI
+
+AI:
 - OpenAI API
+
+Authentication:
 - Firebase Authentication
-- SQLAlchemy
-- Docker
-- Google Cloud Run
-- Google Cloud Storage
+
+Storage:
+- Firebase Storage
+
+Database:
+- SQLite (can be upgraded to PostgreSQL)
+
+---
 
 ## 📁 Project Structure
 
+
 talentmatch-ai-saas/
-│
 ├── backend/
-│ ├── main.py
+│ ├── .env
+│ ├── app.db
 │ ├── db.py
+│ ├── main.py
 │ ├── models.py
-│ ├── schemas.py
-│ ├── services.py
 │ ├── requirements.txt
-│ └── .env
-│
+│ ├── schemas.py
+│ ├── serviceAccountKey.json
+│ └── services.py
 ├── frontend/
+│ ├── .env
 │ ├── app.py
 │ └── requirements.txt
-│
+├── .dockerignore
+├── .env
+├── .gitignore
+├── docker-compose.yml
 ├── Dockerfile.backend
 ├── Dockerfile.frontend
-├── .dockerignore
-├── .gitignore
 └── README.md
 
-## 🔐 Environment Variables
+ ---
 
-Create:
+## ⚙️ Environment Setup
 
-- backend/.env
+Backend (backend/.env)
 
-Example:
-
-- OPENAI_API_KEY=your_openai_api_key
+- OPENAI_API_KEY=your_openai_key
 - FIREBASE_API_KEY=your_firebase_api_key
-- GOOGLE_APPLICATION_CREDENTIALS=path_to_service_account.json
-- GOOGLE_CLOUD_PROJECT=your_project_id
-- BUCKET_NAME=your_bucket_name
+- GOOGLE_APPLICATION_CREDENTIALS=./serviceAccountKey.json
 - DATABASE_URL=sqlite:///./app.db
 
-## ▶️ Run Locally
+Root (.env)
 
-Backend
+- FIREBASE_API_KEY=your_firebase_api_key
+
+ ---
+
+## ▶️ Run Locally (without Docker)
+
+Backend:
 
 - cd backend
-- pip install -r requirements.txt
-- python -m uvicorn main:app --reload
+- uvicorn main:app --reload
 
-Backend runs on:
-
-- http://127.0.0.1:8000
-
-Frontend
+Frontend:
 
 - cd frontend
-- pip install -r requirements.txt
 - streamlit run app.py
 
-Frontend runs on:
+ ---
 
-- http://localhost:8501
+## 🌍 Vision
 
-## 🐳 Docker
+- This is just the MVP.
 
-Backend
+Future plans:
 
-- docker build -f Dockerfile.backend -t talentmatch-backend .
+- Resume optimization suggestions (auto-rewrite)
+- ATS score simulation
+- Job matching engine
+- Recruiter dashboard
 
-Frontend
-
-- docker build -f Dockerfile.frontend -t talentmatch-frontend .
-
-## ☁️ Deployment
-
-Deploy using Google Cloud Run:
-
-- Backend → Cloud Run service
-- Frontend → Cloud Run service
-- Secrets → Secret Manager
-- Storage → Cloud Storage
-- Auth → Firebase / Identity Platform
+ ---
 
 ## 👤 Author
 
 **Dejan Jović**
 **dejan.jovic1283@gmail.com**
+
+ ---
+
+## ⭐ Why this matters
+
+This project demonstrates:
+
+- Full-stack development (FastAPI + Streamlit)
+- API integration (OpenAI, Firebase)
+- Authentication & security
+- Real-world SaaS architecture
+- Docker & deployment readiness
+
+ ---
+
+## 👉 This is not just a project — it’s a product. 
+
+ ---

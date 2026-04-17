@@ -1,20 +1,22 @@
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Integer, Text
+from sqlalchemy import Column, DateTime, Integer, String, Text # type: ignore
 
 from db import Base
 
 
-class Analysis(Base):
-    __tablename__ = "analyses"
+class AnalysisHistory(Base):
+    """
+    Database model for storing CV analysis results.
+    Each row represents one analyzed CV.
+    """
+
+    __tablename__ = "analysis_history"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_email = Column(Text, nullable=False, index=True)
-    filename = Column(Text, nullable=False)
-    file_url = Column(Text, nullable=True)
-    resume_text = Column(Text, nullable=False)
-    job_description = Column(Text, nullable=False)
-    match_score = Column(Integer, nullable=False, default=0)
+    user_email = Column(String, nullable=False, index=True)
+    filename = Column(String, nullable=False)
+    match_score = Column(Integer, nullable=False)
     summary = Column(Text, nullable=True)
     strengths = Column(Text, nullable=True)
     weaknesses = Column(Text, nullable=True)

@@ -3,48 +3,31 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.Python
 
-# Virtual environments
-.venv/
+# Virtual env
 venv/
-env/
+.venv/
 
-# Environment variables
+# Env files (SECRETS)
 .env
 .env.*
-backend/.env
+
+# Firebase / Google secrets
+serviceAccountKey.json
 
 # Database
 *.db
-*.sqlite3
-app.db
 
-# VS Code / IDE
+# IDE
 .vscode/
 .idea/
 
-# OS files
+# OS
 .DS_Store
 Thumbs.db
 
 # Logs
 *.log
 
-# Streamlit
-.streamlit/
-
-# Google Cloud / Firebase secrets
-*.json
-
-# Build artifacts
-dist/
-build/
-
-# Temp
-tmp/
-temp/
-uploads/
-
-serviceAccountKey.json
-backend/serviceAccountKey.json
+# Git
+.git/

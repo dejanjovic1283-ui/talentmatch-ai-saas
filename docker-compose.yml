@@ -1,0 +1,29 @@
+version: "3.13"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: talentmatch-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - backend/.env
+    volumes:
+      - ./backend/app.db:/app/app.db
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: talentmatch-frontend
+    ports:
+      - "8501:8501"
+    environment:
+      API_BASE_URL: http://backend:8000
+      FIREBASE_API_KEY: ${FIREBASE_API_KEY}
+    depends_on:
+      - backend
+    restart: unless-stopped

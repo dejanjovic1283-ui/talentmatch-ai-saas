@@ -1,50 +1,15 @@
-# Git
-.git
-.gitignore
-
-# Python
-__pycache__/
+.venv
+venv
+__pycache__
 *.pyc
 *.pyo
 *.pyd
-.Python
-
-# Virtual environments
-.venv/
-venv/
-env/
-
-# Environment files
+*.log
+.git
+.gitignore
+.vscode
 .env
 .env.*
+frontend/.env
 backend/.env
-
-# Editors
-.vscode/
-.idea/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
-
-# Databases
-*.db
-*.sqlite3
-
-# Streamlit cache
-.streamlit/
-
-# Local uploads / temp
-tmp/
-temp/
-uploads/
-
-# Secrets / service accounts
-*.json
-
-# Optional local artifacts
-dist/
-build/
+backend/app.db

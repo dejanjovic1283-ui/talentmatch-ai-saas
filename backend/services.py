@@ -1,59 +1,75 @@
-import os
-import certifi
-import ssl
-
-os.environ["SSL_CERT_FILE"] = certifi.where()
-import os
-
-
-os.environ["REQUESTS_CA_BUNDLE"] = certifi.where()
-ssl._create_default_https_context = ssl._create_unverified_context
-
 import json
+import os
 import re
+import ssl
 from io import BytesIO
-from typing import Any, Dict, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
+import certifi
 import firebase_admin
 import requests
 from dotenv import load_dotenv
 from firebase_admin import auth as firebase_auth, credentials
-from google.cloud import storage
 from openai import OpenAI
 from PyPDF2 import PdfReader
 
 load_dotenv()
 
+CERT_PATH = certifi.where()
+os.environ["SSL_CERT_FILE"] = CERT_PATH
+os.environ["REQUESTS_CA_BUNDLE"] = CERT_PATH
+os.environ["CURL_CA_BUNDLE"] = CERT_PATH
 
+# Enable this only for local development if Windows SSL continues to fail.
+DISABLE_SSL_VERIFY = os.getenv("DISABLE_SSL_VERIFY", "false").lower() == "true"
+
+if DISABLE_SSL_VERIFY:
+    import urllib3
+
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    ssl._create_default_https_context = ssl._create_unverified_context
+
+    original_request = requests.Session.request
+
+    def patched_request(self, method, url, **kwargs):
+        kwargs.setdefault("verify", False)
+        return original_request(self, method, url, **kwargs)
+
+    requests.Session.request = patched_request
 
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 FIREBASE_API_KEY = os.getenv("FIREBASE_API_KEY")
-GOOGLE_CLOUD_PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT")
-BUCKET_NAME = os.getenv("BUCKET_NAME")
-GOOGLE_APPLICATION_CREDENTIALS = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+GOOGLE_APPLICATION_CREDENTIALS = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "./serviceAccountKey.json")
+
+
+def resolve_credentials_path() -> str:
+    """Resolve the service account path relative to the current file."""
+    raw_path = GOOGLE_APPLICATION_CREDENTIALS or "./serviceAccountKey.json"
+    path = Path(raw_path)
+
+    if not path.is_absolute():
+        path = Path(__file__).resolve().parent / raw_path
+
+    return str(path.resolve())
 
 
 def get_openai_client() -> OpenAI:
-    api_key = OPENAI_API_KEY or os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise ValueError("OPENAI_API_KEY is not set.")
-    return OpenAI(api_key=api_key)
+    """Create an OpenAI client using the API key from environment variables."""
+    if not OPENAI_API_KEY:
+        raise ValueError("OPENAI_API_KEY is not set in the .env file.")
+
+    return OpenAI(api_key=OPENAI_API_KEY)
 
 
-def init_firebase():
-    import os
-    import firebase_admin
-    from firebase_admin import credentials
-
+def init_firebase() -> None:
+    """Initialize Firebase Admin SDK once."""
     if firebase_admin._apps:
         return
 
-    cred_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-
-    if not cred_path:
-        raise ValueError("GOOGLE_APPLICATION_CREDENTIALS not set")
-
+    cred_path = resolve_credentials_path()
     if not os.path.exists(cred_path):
         raise ValueError(f"Service account file not found: {cred_path}")
 
@@ -61,214 +77,195 @@ def init_firebase():
     firebase_admin.initialize_app(cred)
 
 
-def signup_user(email: str, password: str) -> Dict[str, Any]:
-    """
-    Creates a user via Firebase Authentication REST API.
-    """
-    if not FIREBASE_API_KEY:
-        raise ValueError("FIREBASE_API_KEY is not set.")
+def verify_firebase_token(id_token: str) -> Dict[str, Any]:
+    """Verify a Firebase ID token using Firebase Admin SDK."""
+    if not id_token:
+        raise ValueError("ID token is missing.")
 
-    url = f"https://identitytoolkit.googleapis.com/v1/accounts:signUp?key={FIREBASE_API_KEY}"
-    payload = {
-        "email": email,
-        "password": password,
-        "returnSecureToken": True,
-    }
-
-    response = requests.post(url, json=payload, timeout=30)
-    data = response.json()
-
-    if response.status_code != 200:
-        message = data.get("error", {}).get("message", "Firebase signup failed.")
-        raise ValueError(message)
-
-    return data
-
-
-def login_user(email: str, password: str) -> Dict[str, Any]:
-    """
-    Logs in a user via Firebase Authentication REST API.
-    """
-    if not FIREBASE_API_KEY:
-        raise ValueError("FIREBASE_API_KEY is not set.")
-
-    url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={FIREBASE_API_KEY}"
-    payload = {
-        "email": email,
-        "password": password,
-        "returnSecureToken": True,
-    }
-
-    response = requests.post(url, json=payload, timeout=30)
-    data = response.json()
-
-    if response.status_code != 200:
-        message = data.get("error", {}).get("message", "Firebase login failed.")
-        raise ValueError(message)
-
-    return data
-
-
-def verify_id_token(id_token: str) -> Dict[str, Any]:
-    """
-    Verifies Firebase ID token with Firebase Admin SDK.
-    """
     init_firebase()
-    decoded = firebase_auth.verify_id_token(id_token)
-    return decoded
+    return firebase_auth.verify_id_token(id_token, check_revoked=False)
 
 
-def extract_text_from_pdf_bytes(file_bytes: bytes) -> str:
-    """
-    Extracts text from an uploaded PDF file.
-    """
+def verify_token_with_rest_api(id_token: str) -> Dict[str, Any]:
+    """Fallback verification through Firebase Identity Toolkit REST API."""
+    if not FIREBASE_API_KEY:
+        raise ValueError("FIREBASE_API_KEY is not set in the .env file.")
+
+    url = f"https://identitytoolkit.googleapis.com/v1/accounts:lookup?key={FIREBASE_API_KEY}"
+    response = requests.post(
+        url,
+        json={"idToken": id_token},
+        timeout=30,
+        verify=False if DISABLE_SSL_VERIFY else CERT_PATH,
+    )
+    response.raise_for_status()
+
+    payload = response.json()
+    users = payload.get("users", [])
+    if not users:
+        raise ValueError("User not found for the provided token.")
+
+    user = users[0]
+    return {
+        "uid": user.get("localId"),
+        "email": user.get("email"),
+        "email_verified": user.get("emailVerified", False),
+        "name": user.get("displayName"),
+    }
+
+
+def clean_text(text: str) -> str:
+    """Normalize extracted text for analysis."""
+    text = text.replace("\x00", " ")
+    text = re.sub(r"\r\n?", "\n", text)
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def strip_code_fences(text: str) -> str:
+    """Remove markdown code fences from model output."""
+    text = text.strip()
+    text = re.sub(r"^```json\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"^```\s*", "", text)
+    text = re.sub(r"\s*```$", "", text)
+    return text.strip()
+
+
+def normalize_list(value: Any) -> List[str]:
+    """Convert a value to a list of clean strings."""
+    if value is None:
+        return []
+
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+
+    if isinstance(value, str):
+        parts = re.split(r"[\n•\-]+", value)
+        return [part.strip() for part in parts if part.strip()]
+
+    return [str(value).strip()]
+
+
+def normalize_score(value: Any) -> int:
+    """Convert a score to an integer in the range 0-100."""
+    try:
+        score = int(value)
+        return max(0, min(100, score))
+    except Exception:
+        return 0
+
+
+def extract_text_from_pdf(file_bytes: bytes) -> str:
+    """Extract text from a PDF file."""
+    if not file_bytes:
+        raise ValueError("The uploaded PDF file is empty.")
+
     try:
         reader = PdfReader(BytesIO(file_bytes))
-        parts = []
+        pages: List[str] = []
+
         for page in reader.pages:
-            text = page.extract_text() or ""
-            if text.strip():
-                parts.append(text.strip())
-        return "\n".join(parts).strip()
-    except Exception as e:
-        raise ValueError(f"Failed to read PDF: {e}") from e
+            page_text = page.extract_text() or ""
+            if page_text.strip():
+                pages.append(page_text)
+
+        text = clean_text("\n\n".join(pages))
+        if not text:
+            raise ValueError("Could not extract text from the PDF.")
+
+        return text
+    except Exception as exc:
+        raise ValueError(f"PDF processing failed: {exc}") from exc
 
 
-def upload_file_to_gcs(file_bytes: bytes, destination_blob_name: str, content_type: str = "application/pdf") -> str:
-    """
-    Uploads file to Google Cloud Storage and returns gs:// path.
-    """
-    if not BUCKET_NAME:
-        raise ValueError("BUCKET_NAME is not set.")
+def build_analysis_messages(cv_text: str, job_description: str) -> List[Dict[str, str]]:
+    """Build the messages sent to the OpenAI model."""
+    cv_text = cv_text[:12000]
+    job_description = job_description[:4000]
 
-    client = storage.Client(project=GOOGLE_CLOUD_PROJECT or None)
-    bucket = client.bucket(BUCKET_NAME)
-    blob = bucket.blob(destination_blob_name)
-    blob.upload_from_string(file_bytes, content_type=content_type)
+    system_prompt = (
+        "You are an expert technical recruiter. "
+        "Compare the candidate CV against the job description and return strict JSON only."
+    )
 
-    return f"gs://{BUCKET_NAME}/{destination_blob_name}"
+    user_prompt = f"""
+Analyze this CV against the job description.
+
+Return JSON with exactly these keys:
+{{
+  "match_score": 0-100,
+  "strengths": ["..."],
+  "weaknesses": ["..."],
+  "missing_skills": ["..."],
+  "suggestions": ["..."],
+  "summary": "short paragraph"
+}}
+
+Rules:
+- match_score must be an integer from 0 to 100
+- strengths, weaknesses, missing_skills, and suggestions must be arrays of short strings
+- summary must be concise and useful
+- return valid JSON only
+- answer in English
+
+JOB DESCRIPTION:
+{job_description}
+
+CV TEXT:
+{cv_text}
+""".strip()
+
+    return [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
 
 
-def normalize_text(text: str) -> str:
-    text = text.lower()
-    text = re.sub(r"[^a-z0-9+#./ -]", " ", text)
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
+def parse_analysis_response(raw_text: str) -> Dict[str, Any]:
+    """Parse the OpenAI response into structured analysis output."""
+    raw_text = strip_code_fences(raw_text)
+
+    try:
+        data = json.loads(raw_text)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", raw_text, flags=re.DOTALL)
+        if not match:
+            raise ValueError("The model response is not valid JSON.")
+        data = json.loads(match.group(0))
+
+    return {
+        "match_score": normalize_score(data.get("match_score")),
+        "strengths": normalize_list(data.get("strengths")),
+        "weaknesses": normalize_list(data.get("weaknesses")),
+        "missing_skills": normalize_list(data.get("missing_skills")),
+        "suggestions": normalize_list(data.get("suggestions")),
+        "summary": str(data.get("summary", "")).strip(),
+    }
 
 
-def calculate_keyword_match_score(resume_text: str, job_description: str) -> int:
-    """
-    Simple deterministic keyword overlap score from 0 to 100.
-    Useful as a quick score before/alongside LLM analysis.
-    """
-    if not resume_text.strip() or not job_description.strip():
-        return 0
-
-    jd_words = set(normalize_text(job_description).split())
-    resume_words = set(normalize_text(resume_text).split())
-
-    filtered_jd_words = {w for w in jd_words if len(w) > 2}
-    if not filtered_jd_words:
-        return 0
-
-    overlap = filtered_jd_words.intersection(resume_words)
-    score = int((len(overlap) / len(filtered_jd_words)) * 100)
-    return max(0, min(score, 100))
-
-
-def analyze_resume_with_ai(resume_text: str, job_description: str) -> Dict[str, Any]:
-    """
-    Main AI analysis for CV vs job description.
-    Returns structured JSON.
-    """
-    if not resume_text.strip():
-        raise ValueError("Resume text is empty.")
+def analyze_cv_text(cv_text: str, job_description: str) -> Dict[str, Any]:
+    """Run CV analysis against a job description using OpenAI."""
+    if not cv_text.strip():
+        raise ValueError("CV text is empty.")
 
     if not job_description.strip():
         raise ValueError("Job description is empty.")
 
     client = get_openai_client()
-    quick_score = calculate_keyword_match_score(resume_text, job_description)
-
-    prompt = f"""
-You are an expert technical recruiter and CV reviewer.
-
-Analyze the candidate resume against the job description.
-
-Return ONLY valid JSON with this exact structure:
-{{
-  "match_score": 0,
-  "summary": "",
-  "strengths": ["", "", ""],
-  "weaknesses": ["", "", ""],
-  "missing_skills": ["", "", ""],
-  "suggestions": ["", "", ""]
-}}
-
-Rules:
-- match_score must be an integer from 0 to 100
-- summary must be short and practical
-- strengths, weaknesses, missing_skills, suggestions must each contain 3 to 6 items
-- be concrete, concise, and job-oriented
-- do not include markdown
-- do not include any text outside JSON
-
-Quick keyword overlap score: {quick_score}/100
-
-JOB DESCRIPTION:
-{job_description}
-
-RESUME:
-{resume_text}
-""".strip()
+    messages = build_analysis_messages(cv_text=cv_text, job_description=job_description)
 
     response = client.chat.completions.create(
-        model="gpt-4.1-mini",
+        model=OPENAI_MODEL,
+        messages=messages,
         temperature=0.2,
-        response_format={"type": "json_object"},
-        messages=[
-            {"role": "system", "content": "You are a precise resume-job matching assistant."},
-            {"role": "user", "content": prompt},
-        ],
     )
 
-    content = response.choices[0].message.content
-    data = json.loads(content)
-
-    data["match_score"] = int(data.get("match_score", quick_score))
-    data["match_score"] = max(0, min(data["match_score"], 100))
-
-    if "summary" not in data or not isinstance(data["summary"], str):
-        data["summary"] = "Resume analysis completed."
-
-    for key in ["strengths", "weaknesses", "missing_skills", "suggestions"]:
-        if key not in data or not isinstance(data[key], list):
-            data[key] = []
-
-    return data
+    raw_text = response.choices[0].message.content or ""
+    return parse_analysis_response(raw_text)
 
 
-def build_analysis_payload(
-    user_email: str,
-    filename: str,
-    resume_text: str,
-    job_description: str,
-    ai_result: Dict[str, Any],
-    file_url: Optional[str] = None,
-) -> Dict[str, Any]:
-    """
-    Helper to build a clean analysis object for DB saving or API response.
-    """
-    return {
-        "user_email": user_email,
-        "filename": filename,
-        "file_url": file_url,
-        "resume_text": resume_text,
-        "job_description": job_description,
-        "match_score": ai_result.get("match_score", 0),
-        "summary": ai_result.get("summary", ""),
-        "strengths": ai_result.get("strengths", []),
-        "weaknesses": ai_result.get("weaknesses", []),
-        "missing_skills": ai_result.get("missing_skills", []),
-        "suggestions": ai_result.get("suggestions", []),
-    }
+def analyze_cv_file(file_bytes: bytes, job_description: str) -> Dict[str, Any]:
+    """Extract text from a PDF and analyze it against the job description."""
+    cv_text = extract_text_from_pdf(file_bytes)
+    return analyze_cv_text(cv_text=cv_text, job_description=job_description)
